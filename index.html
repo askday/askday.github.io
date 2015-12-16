@@ -14,7 +14,14 @@ index: true
                   <p><i class="fa fa-calendar"></i> &nbsp;{{ post.date | date: "%b %-d, %Y" }} | {% if site.disqus_short_name and page.comments != false and site.disqus_show_comment_count == true %}
          <!-- <a href="{% if page.index %}{{ root_url }}{{ post.url }}{% endif %}#disqus_thread">Comments</a> -->
         {% endif %}</p>
-                
+                  {% if post.content contains '<!-- more -->' %}
+                    <p>{{ post.content | split:'<!-- more -->' | first }}
+                      <br><br>
+                      <!-- <a href="{{ post.url }}"class="btn btn-primary btn-sm">Read More</a> -->
+                    </p>
+                  {% else %}
+                    {{ post.content }}
+                  {% endif %}
                 {% endfor %}
               </div>
             </div>
