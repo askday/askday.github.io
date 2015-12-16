@@ -3,7 +3,7 @@ title: 天天淡定的
 description: A clean minimal Theme for Jekyll
 email: pranav@maangalabs.com
 baseurl: /swift
-url: "http://pranav.maangalabs.com" # the base hostname & protocol for your site
+url: "http://askday.github.io/" # the base hostname & protocol for your site
 #favicon
 favicon: /favicon.png
 
