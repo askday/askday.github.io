@@ -1,0 +1,11 @@
+---
+layout: post
+title:  "Jekyll小记"
+date:   2014-09-09 22:37:00 +05:30
+categories: 随笔
+author: wangxiang
+github_repo_username: askday
+comments: false
+---
+
+Jekyll搭建遇到不少问题，在此作为开篇文章记录下
