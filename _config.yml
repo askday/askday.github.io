@@ -6,7 +6,8 @@ email: xiangbo-99@163.com
 url: "http://askday.github.io/" # the base hostname & protocol for your site
 #favicon
 favicon: /favicon.png
-
+# highlighter: pygments
+encoding: utf-8
 #feed
 feedburner_username: wangxiang
 #twitter

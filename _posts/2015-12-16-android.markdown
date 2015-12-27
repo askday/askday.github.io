@@ -9,15 +9,17 @@ comments: false
 ---
 
 今天在实现点击按钮打电话功能时，通过下面代码段
-{%hilight java%}
+{%highlight  java%}
   Intent callIntent = new Intent(Intent.ACTION_CALL, Uri.parse("400-123-456"));
   mContext.startActivity(callIntent);
-{%endhilght%}
+{%endhighlight%}
 死活都报android.content.ActivityNotFoundException问题，折腾了一中午最后发现是由于电话的scheme导致
 改成如下即可：
-{%hilight java%}
+
+{%highlight  java%}
   Intent callIntent = new Intent(Intent.ACTION_CALL, Uri.parse("tel:400-123-456"));
   mContext.startActivity(callIntent);
-{%endhilght%}
+
+{%endhighlight %}
 
 少了tel：前缀。
