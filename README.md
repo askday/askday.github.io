@@ -1,7 +1,2 @@
-swift
+天天淡定的
 =====
-
-A clean Minimal Blog theme for Jekyll , built with Bootswatch 
-
-
-![ThisIsADemoPhoto](/images/swift.png)
