@@ -49,9 +49,3 @@ $ cd nuclide
 $ npm install
 
 $ apm link
-
-
-<br/>
-<br/>
-<br/>
-<br/>
