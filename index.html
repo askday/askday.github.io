@@ -9,6 +9,7 @@ index: true
               <div class="blog-post-small">
                 {% for post in site.posts %}
                   <h3><a href="{{ post.url | prepend: site.baseurl }}">{{ post.title }}</a></h3>
+                  <hr/>
                   <p>
                     <i class="fa fa-calendar"></i> &nbsp;{{ post.date | date: "%b %-d, %Y" }}
                   </p>
