@@ -11,15 +11,21 @@ comments: false
 1.安装
 
 安装brew
+
 ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
 
 安装nvm 先设置一个.bash_profile文件
+
 curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.30.1/install.sh | bash
+
 安装node js
 
 nvm install node && nvm alias default node
+
 由于墙的关系 该命令无法执行
+
 可到node.js 官网下载https://nodejs.org/en/
+
 最新的安装包,安装完在终端下运行node -v成功即可
 
 brew install watchman
@@ -35,9 +41,13 @@ npm install -g react-native-cli
 下载atom：https://atom.io/
 
 添加react-native开发插件 nuclide
+
 git clone https://github.com/facebook/nuclide.git
+
 $ cd nuclide
+
 $ npm install
+
 $ apm link
 
 
