@@ -1,6 +1,6 @@
 ---
 layout: page
-title:  "react-native 开发环境搭建"
+title:  "react-native开发环境搭建"
 date:   2016-01-28 16:20:00 +05:30
 categories: react-native
 author: wangxiang

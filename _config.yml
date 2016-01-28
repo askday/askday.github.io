@@ -10,20 +10,7 @@ favicon: /favicon.png
 encoding: utf-8
 #feed
 feedburner_username: wangxiang
-#twitter
-# twitter_username: askday
 github_username:  askday
-
-#linkedin
-# linkedin_username: pranavrajs
-
-#google analytics
-# google_analytics_id : UA-53386152-2
-#gplus
-# gplus_username: 101893920934936418705
-
-#fb_username
-# fb_username: pranav.tayberrycreative
 
 #permalink /blog/2014/11/11/this-is-a-sample-post
 permalink: /blog/:year/:month/:day/:title
