@@ -32,7 +32,7 @@ android放在drawable下的图片
 {%highlight  html%}
 <Image
   source = \{\{uri: 'http://ss.bdimg.com/static/superman/img/logo/bd_logo1_31bdc765.png'\}\}
-  style = {{width: 200,height: 100}}/>
+  style = \{\{width: 200,height: 100\}\}/>
 {%endhighlight%}
 
 4.图片圆角处理
@@ -40,7 +40,7 @@ android放在drawable下的图片
 {%highlight  html%}
 <Image
   borderRadius={40}
-  source = {{uri: userPic}}/>
+  source = \{\{uri: userPic\}\}/>
 {%endhighlight%}
 
 5.图片拉升
@@ -53,6 +53,6 @@ android放在drawable下的图片
 
 {%highlight  html%}
   <Image
-    defaultSource = {{uri:'mine_photo'}}
-    source = {{uri: userPic}}/>
+    defaultSource = \{\{uri:'mine_photo'\}\}
+    source = \{\{uri: userPic\}\}/>
 {%endhighlight%}
