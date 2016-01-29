@@ -95,7 +95,7 @@ module.exports = ActionSheetIOS;
 我们看到关键是引入底层oc的方式，其他的跟写前端没啥差别
 
 然后再看RCTActionSheetManager的实现
-{% highlight object-c%}
+{% highlight java%}
 #import <UIKit/UIKit.h>
 
 #import "RCTBridge.h"
@@ -107,7 +107,7 @@ module.exports = ActionSheetIOS;
 
 主要是实现了RCTBridgeModule这个协议，这个协议是实现前端js-》oc的主要中间件，感兴趣的可以看看实现，然后就是对RCTActionSheetManager的实现的代码，关键几句
 
-{% highlight object-c %}
+{% highlight java %}
 @implementation RCTActionSheetManager
 {
 // Use NSMapTable, as UIAlertViews do not implement <NSCopying>
