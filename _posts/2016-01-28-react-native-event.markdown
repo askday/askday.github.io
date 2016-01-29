@@ -41,7 +41,7 @@ this.props.navigator.push({
 
 此时在toView页面可以看到导航条，且导航条的rightButton上面含有说明两个字
 
-rightButton有一个点击事件，实在UserView中实现的
+rightButton有一个点击事件，是在UserView中实现的
 
 {%highlight  javascript%}
 onRightButtonPress: function() {
