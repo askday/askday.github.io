@@ -23,7 +23,7 @@ ActionSheetIOS.showActionSheetWithOptions({
 {% endhighlight %}
 
 这些组件的使用方式都大同小异，通过声明一个native module，然后在这个组件内部通过底层实现方法的具体内容
-
+<!-- more -->
 像ActionSheetIOS在使用的时候，首先需要在工程的pod库中添加ActionSheetIOS对应的RCTActionSheet
 
 {% highlight html%}
