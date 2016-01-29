@@ -28,7 +28,7 @@ android放在drawable下的图片
 3.加载远程url图片
 
 远程图片要指定图片的大小
-
+<!-- more -->
 {%highlight  html%}
 <Image
   source = \{\{uri: 'http://ss.bdimg.com/static/superman/img/logo/bd_logo1_31bdc765.png'\}\}
