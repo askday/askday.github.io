@@ -1,0 +1,137 @@
+---
+layout: post
+title: "android自动生成守护进程的程序为so文件（二）"
+date: "2016-02-23 17:46:59"
+---
+
+  android在编译的时候可以自动的将jni生成的so文件、可执行程序放到app的lib目录下，但是so文件可以打包到app的lib目录下，的可执行程序是无法打包到app的lib目录下
+
+所以，当我们编译好守护进程的可执行程序后还需要将生成的可执行程序copy到app的Assets目录下，这样打包的时候就可以被包到apk中
+
+可是测试的时候每次都copy一次还是很费劲，那么如何在jni编译生成可执行程序的时候也将可执行程序伪装成so文件不就可以了吗？
+
+我们看下生成一个可执行程序的android.mk文件如下：
+{% highlight java %}
+LOCAL_PATH := $(call my-dir)
+
+include $(CLEAR_VARS)
+
+LOCAL_SRC_FILES := 	daemon.cpp									
+LOCAL_MODULE    := 	daemon  
+
+LOCAL_LDLIBS := -lm -llog
+include $(BUILD_EXECUTABLE)
+{% endhighlight %}
+
+那么如果要生存so文件,理论上只需要将LOCAL_MODULE改成libdaemon.so即可
+但是编译的时候报错
+
+{% highlight java %}
+18:14:28 **** Build of configuration Default for project Daemon ****
+/Library/Android/ndk/ndk-build all
+/Library/Android/ndk/build/core/build-executable.mk:30: *** Android NDK: Aborting    .  Stop.
+Android NDK: jni/daemon/Android.mk:daemon.so: LOCAL_MODULE_FILENAME must not contain a file extension    
+18:14:29 Build Finished (took 150ms)
+{% endhighlight %}
+
+说在build-executable.mk执行错误，不能含有扩展名
+
+那么到android ndk中找到这个文件build-executable.mk
+{% highlight java %}
+# Copyright (C) 2009 The Android Open Source Project
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# this file is included from Android.mk files to build a target-specific
+# executable program
+#
+
+LOCAL_BUILD_SCRIPT := BUILD_EXECUTABLE
+LOCAL_MAKEFILE     := $(local-makefile)
+
+$(call check-defined-LOCAL_MODULE,$(LOCAL_BUILD_SCRIPT))
+$(call check-LOCAL_MODULE,$(LOCAL_MAKEFILE))
+$(call check-LOCAL_MODULE_FILENAME)
+
+# we are building target objects
+my := TARGET_
+
+$(call handle-module-filename,,)
+$(call handle-module-built)
+
+LOCAL_MODULE_CLASS := EXECUTABLE
+include $(BUILD_SYSTEM)/build-module.mk
+
+{% endhighlight %}
+
+报错在$(call handle-module-filename,,)，搜搜handle-module-filename的定义发现
+{% highlight java %}
+# -----------------------------------------------------------------------------
+# Function  : handle-module-filename
+# Arguments : 1: default file prefix
+#             2: file suffix
+# Returns   : None
+# Usage     : $(call handle-module-filename,<prefix>,<suffix>)
+# Rationale : To be used to check and or set the module's filename through
+#             the LOCAL_MODULE_FILENAME variable.
+# -----------------------------------------------------------------------------
+handle-module-filename = $(eval $(call ev-handle-module-filename,$1,$2))
+
+#
+# Check that LOCAL_MODULE_FILENAME is properly defined
+# - with one single item
+# - without a library file extension
+# - with no directory separators
+#
+define ev-check-module-filename
+ifneq (1,$$(words $$(LOCAL_MODULE_FILENAME)))
+    $$(call __ndk_info,$$(LOCAL_MAKEFILE):$$(LOCAL_MODULE): LOCAL_MODULE_FILENAME must not contain any space)
+    $$(call __ndk_error,Aborting)
+endif
+ifneq (,$$(filter %$$(TARGET_LIB_EXTENSION) %$$(TARGET_SONAME_EXTENSION),$$(LOCAL_MODULE_FILENAME)))
+    $$(call __ndk_info,$$(LOCAL_MAKEFILE):$$(LOCAL_MODULE): LOCAL_MODULE_FILENAME must not contain a file extension)
+    $$(call __ndk_error,Aborting)
+endif
+ifneq (1,$$(words $$(subst /, ,$$(LOCAL_MODULE_FILENAME))))
+    $$(call __ndk_info,$$(LOCAL_MAKEFILE):$$(LOCAL_MODULE): LOCAL_MODULE_FILENAME must not contain directory separators)
+    $$(call __ndk_error,Aborting)
+endif
+endef
+{% endhighlight %}
+
+发现在definitions.mk中,不太好改
+再看看下一句$(call handle-module-built)，在ndk的代码下搜到handle-module-built相关信息如下：
+{% highlight java %}
+# -----------------------------------------------------------------------------
+# Function  : handle-module-built
+# Returns   : None
+# Usage     : $(call handle-module-built)
+# Rationale : To be used to automatically compute the location of the generated
+#             binary file, and the directory where to place its object files.
+# -----------------------------------------------------------------------------
+handle-module-built = \
+    $(eval LOCAL_BUILT_MODULE := $(TARGET_OUT)/$(LOCAL_MODULE_FILENAME))\
+    $(eval LOCAL_OBJS_DIR     := $(TARGET_OBJS)/$(LOCAL_MODULE))
+{% endhighlight %}
+
+貌似是定义生成的module的文件放跟目录out/obj
+我们在build-executable.mk中自己定义一个
+
+$(eval LOCAL_BUILT_MODULE := $(TARGET_OUT)/$(MY_LOCAL_MODULE_FILENAME))
+
+放在$(call handle-module-built)之后
+
+在android.mk中定义一个MY_LOCAL_MODULE_FILENAME := libdaemon.so  
+
+这样免去了程序名的检验然后编译，通过了并生成了so库可执行文件。
