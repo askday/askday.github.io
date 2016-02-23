@@ -1,0 +1,225 @@
+---
+layout: post
+title: "android下使用守护进程恢复服务进程(-)"
+date: "2016-02-14 16:00:28"
+---
+
+目的：能够实现android客户端的服务，被一键清理和杀进程两种方式下，能够做到服务进程的自我恢复
+
+服务实现的基本方式如下：
+
+现在manifest里声明，服务
+{% highlight java%}
+      <service
+           android:name=".service.DaemonService"
+           android:process=":daemon" >
+           <intent-filter>
+               <action android:name="com.netease.daemon.service.DaemonService" />
+           </intent-filter>
+       </service>
+{% endhighlight %}
+
+android:process标签用来标识，服务是一个单独的进程，脱离客户端本身的进程
+
+{% highlight java%}
+public class DaemonService extends Service {
+
+	@Override
+	public void onCreate() {
+		super.onCreate();
+		Util.LogD("DaemonService onCreate");
+	}
+
+	@Override
+	public void onDestroy() {
+		Util.LogD("DaemonService onDestroy");
+		super.onDestroy();
+	}
+
+	@Override
+	public IBinder onBind(Intent intent) {
+		Util.LogD("DaemonService onBind");
+		return null;
+	}
+
+	@Override
+	public boolean onUnbind(Intent intent) {
+		Util.LogD("DaemonService onUnBind");
+		return super.onUnbind(intent);
+	}
+
+	@Override
+	public int onStartCommand(Intent intent, int flags, int startId) {
+		Util.LogD("DaemonService onStartCommand:" + START_STICKY);
+		return START_STICKY;
+	}
+}
+{% endhighlight %}
+
+然后客户端可以通过startService or stopService启动关闭服务
+
+{% highlight java %}
+private void startDaemonService() {
+  Intent serviceIntent = new Intent(this, DaemonService.class);
+  startService(serviceIntent);
+}
+
+private void stopDaemonService() {
+  Intent serviceIntent = new Intent(this, DaemonService.class);
+  stopService(serviceIntent);
+}
+{% endhighlight %}
+
+当启动一个服务时，服务先onCreate,在onStart,如果使用的是bind方式还会触发onBind
+
+当关闭一个服务时，服务调用onDestroy
+
+关闭服务时，服务所在的进程根据onStartCommand返回的状态确定如何恢复服务，此时服务的进程是没有终结的
+
+此时如果通过杀进程即调用kill命令，或者使用一键清理功能都会将服务相关的进程杀掉
+{% highlight java%}
+root@m0:/ # pgrep -l netease                                                   
+12092 com.netease.daemon
+12437 com.netease.daemon:daemon
+root@m0:/ # pgrep -l netease                                                   
+1|root@m0:/ #
+{% endhighlight %}
+
+所以如何确保服务在一键清理时不会被杀死，就是我们要解决的问题
+<!-- more -->
+
+让被清理的服务进程再次运行，可以间接在app运行的时候设一个监视进程，通过轮询的方式查找服务进程是否存在，如果不存在则运行服务
+
+那么这个进程其实是一个可执行的程序，我们可以通过在jni层面实现一个可执行程序，实现以下几点功能：
+
+1.使用fork克隆一个子进程，退出父进程，使子进程成为孤儿进程，减少进程被牵连杀死的概率
+
+{% highlight java%}
+  int main(int argc, char *argv[]) {
+    if ((pid = fork()) < 0) {
+      exit(EXIT_SUCCESS);
+    } else if (pid == 0) {
+      processSub(argv[0], package_name, service_name, service_process_name,
+          socket_file_path, interval);
+    } else {
+      exit(EXIT_SUCCESS);
+    }
+  }
+{% endhighlight %}
+
+2.子进程实现一个轮询函数，用来监视服务进程是否运行，如果不存在则调用execlp启动服务
+{% highlight java %}
+  void processSub(const char* bin_name, const char* package_name,
+    const char* service_name, const char* service_process_name,
+    const char* socket_file_path, int interval) {
+  int pid_list[100];
+  int total_num = 0;
+  interval = interval < MIN_SLEEP_INTERVAL ? MIN_SLEEP_INTERVAL : interval;
+  //轮询查找被监视的服务进程是否运行，如果没有查找到服务进程则执行启动进程
+  while (sig_running) {
+    total_num = get_pid_by_name(service_process_name, pid_list);
+    if (total_num == 0) {
+      LOGD("======restart service====");
+      start_service(package_name, service_name);
+    } else {
+      LOGD("======service has run====");
+    }
+    select_sleep(interval, 0);
+  }LOGD("======end====");
+  }
+{% endhighlight %}
+
+启动服务的方式：
+
+{% highlight  java%}
+  void start_service(const char *package_name, const char *service_name) {
+  LOGD("==============start service===========");
+  int version = get_android_sdk_version();
+  pid_t pid;
+  if ((pid = fork()) < 0) {
+    exit(EXIT_SUCCESS);
+  } else if (pid == 0) {
+    if (package_name == NULL || service_name == NULL) {
+      LOGE("package name or service name is null");
+      return;
+    }
+    char *p_name = str_stitching(package_name, "/");
+    char *s_name = str_stitching(p_name, service_name);
+    LOGD("%s", s_name);
+    if (version >= 17 || version == 0) {
+      int ret = execlp("am", "am", "startservice", "--user", "0", "-n",
+          s_name, (char *) NULL);
+    } else {
+      int ret = execlp("am", "am", "startservice", "-n", s_name,
+          (char *) NULL);
+    }
+    exit(EXIT_SUCCESS);
+  } else {
+    waitpid(pid, NULL, WNOHANG);
+  }
+  LOGD("============end==start service===========");
+  }
+{% endhighlight %}
+
+可以关注下父进程执行代码段waitpid(pid, NULL, WNOHANG)
+
+WNOHANG用来表示当前父进程不等待子进程运行完毕，直接继续运行其他工作
+
+这时候在app的java层代码开始启动app的时候调用runtime.exec执行这个可执行文件来监视服务进程
+{% highlight java %}
+private static void start(Context context, Class<?> daemonClazzName, String processName, String daemonProcessName,
+  String socketFilePath, int interval) {
+String cmd = context.getApplicationInfo().dataDir + File.separator + "lib" + File.separator + DAEMON_BIN_NAME;
+
+File file = new File(cmd);
+if (file.exists()) {
+  LogD("file exist");
+} else {
+  LogD("file not exist");
+}
+
+LogD("daemon so path:" + cmd);
+StringBuilder cmdBuilder = new StringBuilder();
+cmdBuilder.append(cmd);
+cmdBuilder.append(" -p ");
+cmdBuilder.append(context.getPackageName());
+cmdBuilder.append(" -s ");
+cmdBuilder.append(daemonClazzName.getName());
+cmdBuilder.append(" -c ");
+cmdBuilder.append(processName);
+cmdBuilder.append(" -d ");
+cmdBuilder.append(daemonProcessName);
+cmdBuilder.append(" -f ");
+cmdBuilder.append(socketFilePath);
+cmdBuilder.append(" -t ");
+cmdBuilder.append(interval);
+
+LogD("command:" + cmdBuilder.toString());
+try {
+  // Process exeEcho = Runtime.getRuntime().exec("su");
+  Runtime.getRuntime().exec("chmod 0755 " + cmd).waitFor();
+  Runtime.getRuntime().exec(cmdBuilder.toString()).waitFor();
+} catch (Exception e) {
+  LogD("start daemon error: " + e.getMessage());
+}
+}
+
+/**
+* 线程启动监控程序
+*
+* @param context
+* @param daemonServiceClazz
+* @param interval
+*/
+public static void run(final Context context, final Class<?> daemonServiceClazz, final String serviceProcessName,
+  final String daemonProcessName, final String socketFilePath, final int interval) {
+new Thread(new Runnable() {
+  @Override
+  public void run() {
+    start(context, daemonServiceClazz, serviceProcessName, daemonProcessName, socketFilePath, interval);
+  }
+}).start();
+
+{% endhighlight %}
+
+但是我们的守护进程是放在app的/data/data/package/lib目录下的，那么如何让可执行程序在编译的时候自动的copy到这个目录下呢？
