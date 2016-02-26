@@ -35,7 +35,7 @@ Android NDK: jni/daemon/Android.mk:daemon.so: LOCAL_MODULE_FILENAME must not con
 {% endhighlight %}
 
 说在build-executable.mk执行错误，不能含有扩展名
-
+<!-- more -->
 那么到android ndk中找到这个文件build-executable.mk
 {% highlight java %}
 # Copyright (C) 2009 The Android Open Source Project
