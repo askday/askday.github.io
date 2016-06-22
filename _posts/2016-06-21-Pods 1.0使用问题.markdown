@@ -1,0 +1,97 @@
+---
+layout: page
+title:  "pods升级到1.0后更新遇到的问题"
+date:   2016-06-21 15:37:00
+categories: ios
+author: wangxiang
+github_repo_username: askday
+comments: false
+---
+
+最近由于换了台新的机器，在使用pods的时候发现更新之前工程的代码都会发生报错，如下：
+
+{%highlight  java%}
+  Update all pods
+    Preparing
+
+  Re-creating CocoaPods due to major version update.
+
+  Analyzing dependencies
+  [!] The dependency `MBProgressHUD (~> 0.9.1)` is not used in any concrete target.
+{%endhighlight%}
+
+原来1.0开始pod的书写格式发生变化，需要在原先的引用库基础上添加一个target对象类似
+
+{%highlight  java%}
+target 'pods' do
+
+pod MBProgressHUD (~> 0.9.1)
+
+end
+{%endhighlight%}
+
+
+可是继续运行pod update，仍然报错，如下：
+
+{%highlight  java%}
+NoMethodError - undefined method `path' for nil:NilClass
+/usr/local/lib/ruby/gems/2.3.0/gems/xcodeproj-1.1.0/lib/xcodeproj/project/object/native_target.rb:462:in `block in add_file_references'
+/usr/local/lib/ruby/gems/2.3.0/gems/xcodeproj-1.1.0/lib/xcodeproj/project/object/native_target.rb:461:in `map'
+/usr/local/lib/ruby/gems/2.3.0/gems/xcodeproj-1.1.0/lib/xcodeproj/project/object/native_target.rb:461:in `add_file_references'
+/usr/local/lib/ruby/gems/2.3.0/gems/cocoapods-1.0.1/lib/cocoapods/installer/target_installer/pod_target_installer.rb:95:in `block in add_files_to_build_phases'
+/usr/local/lib/ruby/gems/2.3.0/gems/cocoapods-1.0.1/lib/cocoapods/installer/target_installer/pod_target_installer.rb:76:in `each'
+/usr/local/lib/ruby/gems/2.3.0/gems/cocoapods-1.0.1/lib/cocoapods/installer/target_installer/pod_target_installer.rb:76:in `add_files_to_build_phases'
+/usr/local/lib/ruby/gems/2.3.0/gems/cocoapods-1.0.1/lib/cocoapods/installer/target_installer/pod_target_installer.rb:21:in `block in install!'
+/usr/local/lib/ruby/gems/2.3.0/gems/cocoapods-1.0.1/lib/cocoapods/user_interface.rb:141:in `message'
+/usr/local/lib/ruby/gems/2.3.0/gems/cocoapods-1.0.1/lib/cocoapods/installer/target_installer/pod_target_installer.rb:17:in `install!'
+/usr/local/lib/ruby/gems/2.3.0/gems/cocoapods-1.0.1/lib/cocoapods/installer.rb:621:in `block (2 levels) in install_libraries'
+/usr/local/lib/ruby/gems/2.3.0/gems/cocoapods-1.0.1/lib/cocoapods/installer.rb:619:in `each'
+/usr/local/lib/ruby/gems/2.3.0/gems/cocoapods-1.0.1/lib/cocoapods/installer.rb:619:in `block in install_libraries'
+/usr/local/lib/ruby/gems/2.3.0/gems/cocoapods-1.0.1/lib/cocoapods/user_interface.rb:141:in `message'
+/usr/local/lib/ruby/gems/2.3.0/gems/cocoapods-1.0.1/lib/cocoapods/installer.rb:618:in `install_libraries'
+/usr/local/lib/ruby/gems/2.3.0/gems/cocoapods-1.0.1/lib/cocoapods/installer.rb:170:in `block in generate_pods_project'
+/usr/local/lib/ruby/gems/2.3.0/gems/cocoapods-1.0.1/lib/cocoapods/user_interface.rb:63:in `section'
+/usr/local/lib/ruby/gems/2.3.0/gems/cocoapods-1.0.1/lib/cocoapods/installer.rb:167:in `generate_pods_project'
+/usr/local/lib/ruby/gems/2.3.0/gems/cocoapods-1.0.1/lib/cocoapods/installer.rb:119:in `install!'
+/usr/local/lib/ruby/gems/2.3.0/gems/cocoapods-1.0.1/lib/cocoapods/command/update.rb:60:in `run'
+/usr/local/lib/ruby/gems/2.3.0/gems/claide-1.0.0/lib/claide/command.rb:334:in `run'
+/usr/local/lib/ruby/gems/2.3.0/gems/cocoapods-1.0.1/lib/cocoapods/command.rb:50:in `run'
+/usr/local/lib/ruby/gems/2.3.0/gems/cocoapods-1.0.1/bin/pod:55:in `<top (required)>'
+/usr/local/bin/pod:22:in `load'
+/usr/local/bin/pod:22:in `<main>'
+{%endhighlight%}
+
+网上搜了一大堆，看到了git上的一个回答：
+https://github.com/CocoaPods/CocoaPods/issues/5427
+
+一开始没看懂是什么意思，后来自己看了log，发现是要求更改pod使用到的相关文件，所以照着文章的方案再次更新pod，顺利通过。
+
+{%highlight  java%}
+--- a/lib/cocoapods/installer/target_installer/pod_target_installer.rb
++++ b/lib/cocoapods/installer/target_installer/pod_target_installer.rb
+@@ -91,7 +91,11 @@ module Pod
+             native_target.add_file_references(regular_file_refs, flags)
+           end
+
+-          header_file_refs = headers.map { |sf| project.reference_for_path(sf) }
++          header_file_refs = headers.map do |sf|
++            project.reference_for_path(sf).tap do |ref|
++              raise "unable to find ref for #{sf}" unless ref
++            end
++          end
+           native_target.add_file_references(header_file_refs) do |build_file|
+             add_header(build_file, public_headers, private_headers)
+           end
+diff --git a/lib/cocoapods/project.rb b/lib/cocoapods/project.rb
+index 6923e42..8eb2b30 100644
+--- a/lib/cocoapods/project.rb
++++ b/lib/cocoapods/project.rb
+@@ -184,6 +184,7 @@ module Pod
+       group = group_for_path_in_group(file_path_name, group, reflect_file_system_structure)
+
+       if ref = reference_for_path(file_path_name.realpath)
++        @refs_by_absolute_path[absolute_path.to_s] = ref
+         ref
+       else
+         ref = group.new_file(file_path_name.realpath)
+{%endhighlight%}
