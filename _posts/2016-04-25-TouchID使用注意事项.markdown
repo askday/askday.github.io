@@ -1,0 +1,9 @@
+---
+layout: page
+title:  "TouchID使用注意事项"
+date:   2016-04-25 20:27:00
+categories: ios
+author: wangxiang
+github_repo_username: askday
+comments: false
+---
