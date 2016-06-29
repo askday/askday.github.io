@@ -5,15 +5,20 @@ date: "2016-06-29 11:47:38 +0800"
 ---
 最近在尝试使用ios工程自带的Test进行底层代码的单元测试，遇到个很奇怪的问题，就是在debug模式下运行主工程正常运行，但是到release模式下就会报错
 如下：
+
+{%highlight  java%}
 Undefined symbols for architecture i386:
   "_OBJC_CLASS_$_SomeClassUnderTest", referenced from:
       objc-class-ref in SomeTest.o
+{%endhighlight%}
 
 真机的时候便是
 
+{%highlight  java%}
 Undefined symbols for architecture arm64:
   "_OBJC_CLASS_$_SomeClassUnderTest", referenced from:
       objc-class-ref in SomeTest.o
+{%endhighlight%}
 
 一开始是以为我使用的是pod工程没有link到某些pod类库中的代码导致，可是后来将test工程添加了pod库，依旧编译报错
 
