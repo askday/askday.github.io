@@ -1,0 +1,103 @@
+---
+layout: post
+title: "wax补丁遇到的问题"
+date: "2016-06-29 14:22:11 +0800"
+---
+
+最近再给我们客户端的一个model类打补丁，发生了一个比较意外的问题，被打补丁的类方法如下：
+
+{%highlight  java%}
+- (NSDictionary*)toDictionary {
+	NSMutableDictionary *dict = [NSMutableDictionary dictionary];
+  ...some coding
+  //被打补丁语句，由于tab类型是一个数组，所以在使用【NSUserDefault】保存到本地的时候会产生崩溃的问题
+  //此处我们计划再补丁直接设置tab为nil
+  if (self.tab) [dict setObject:self.tab forKey:@"tab"];
+  ...some coding
+	return dict;
+}
+{%endhighlight%}
+
+使用wax打补丁撰写的lua代码
+{%highlight  java%}
+
+waxClass{"CFIndexBaseInfo"}
+
+function toDictionary(self)
+    local dic =  self:ORIGtoDictionary(self)
+    if self:tab() then
+        dic['tab'] = nil
+    end
+    return dic
+end
+
+{%endhighlight%}
+
+本地debug运行补丁，完全正常没有发生任何异常
+
+可是当切换到release模式运行补丁发生了崩溃，崩溃代码段：
+
+![actionSheetIOS](/image/wax_bad_access.png)
+
+查看此时的调用堆栈发现，存在着循环引用的问题
+
+![actionSheetIOS](/image/wax-release-stack.png)
+
+发现在被打补丁的model类里，自己实现了- (NSString*)description方法，而且这个方法调用了被打补丁的方法
+
+{% highlight object-c%}
+- (NSString*)description {
+  return [[self toDictionary] description];
+}
+{% endhighlight %}
+
+所以wax在运行补丁的时候应该是触发了description，然后在description里继续调用被打补丁的方法，导致补丁的调用进入死循环，从而导致程序崩溃
+
+但是为什么在debug模式下，补丁没有出现问题，而在release下会崩溃呢？
+
+发现在debug模式下多了一句log，使用宏约束了
+{% highlight object-c%}
+#if DEBUG
+    NSLog(@"self=====%@ sel=====%s", self, anInvocation.selector);
+#endif
+{% endhighlight %}
+
+那么这句话其实就是打印出当前被打补丁的类对象，所以这句话是会调用description对象的
+
+我们看下release打开这个宏的调用栈
+
+![actionSheetIOS](/image/wax-release-log-stack.png)
+
+发现经过几步循环后居然跳出来了，这点有点不可思议，没有找到比较好的解释。。。
+
+但是一开始其实我们的log是不存在的那什么地方调用description这个方法呢
+
+通过跟踪release崩溃的调用栈发现问题出现在
+
+![actionSheetIOS](/image/wax-call-log.png)
+
+所以打补丁的时候需要检查下被打补丁函数是否调用了description
+
+或者在wax的代码中尽可能减少NSLog的使用。
+
+如果存在这样的用例，还需要在打补丁的时候将description方法也一同打个补丁
+
+{% highlight lua%}
+  waxClass{"CFIndexBaseInfo"}
+
+  function toDictionary(self)
+    print '====user lua==start===='
+    local dic =  self:ORIGtoDictionary(self)
+    if self:tab() then
+        dic['tab'] = nil
+    end
+    print '====user lua=end====='
+    return dic
+  end
+
+  function description(self)
+    return '===='
+  end
+{% endhighlight %}
+
+但是这样理论上也是存在循环引用的，如何突破死循环这个问题有机会多了解下。

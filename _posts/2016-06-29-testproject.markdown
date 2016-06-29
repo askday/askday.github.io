@@ -3,8 +3,9 @@ layout: post
 title: "ios在添加单元测试工程，release模式link error"
 date: "2016-06-29 11:47:38 +0800"
 ---
-最近在尝试使用ios工程自带的Test进行底层代码的单元测试，遇到个很奇怪的问题，就是在debug模式下运行主工程正常运行，但是到release模式下就会报错
-如下：
+最近在尝试使用ios工程自带的Test进行底层代码的单元测试，遇到个很奇怪的问题，就是在debug模式下运行主工程正常运行，
+
+但是到release模式下就会报错如下：
 
 {%highlight  java%}
 Undefined symbols for architecture i386:
@@ -27,6 +28,7 @@ Undefined symbols for architecture arm64:
 而test工程是依赖于主工程的，体现在test工程general-》Testing-》Host Application
 
 所以将主工程的debug、release存在差异的地方查看一遍，发现在Symbols Hidden by Default设置项
+
 两者存在差异，索性都设置为NO
 
 再次在release模式下运行工程，编译通过
