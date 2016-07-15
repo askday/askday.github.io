@@ -1,0 +1,215 @@
+---
+layout: post
+title: "url优化"
+date: "2016-07-15 16:02:25 +0800"
+---
+抽空把之前的url跳转注册的代码进行了优化
+
+先看下之前从火车票移植过来的url注册代码的结构
+{% highlight java%}
+- (void)registerRoute
+{
+  WEAK_SELF(weakSelf);
+#pragma mark -首页
+    //今日
+    [JLRoutes addRoute:[self getRoutes:kMAIN_URL_PAGE_INDEX]
+               handler:^BOOL(NSDictionary *parameters) {
+                   [weakSelf gotoMainIndex:parameters];
+                   return YES;
+               }];
+    //向立马君吐槽
+    [JLRoutes addRoute:[self getRoutes:KINDEX_URL_PAGE_TUCHAO]
+               handler:^BOOL(NSDictionary *parameters) {
+                    [weakSelf gotoTuchao:parameters];
+                    return YES;
+              }];
+    ...
+}
+{% endhighlight %}
+
+以上是注册url的函数，代码结构很是简单，每增加一个url:xxxxxx，在这个函数里，添加一段注册的代码，即：
+{% highlight java%}
+[JLRoutes addRoute:[self getRoutes:xxxxxx]
+           handler:^BOOL(NSDictionary *parameters) {
+                [weakSelf gotoXxxxxx:parameters];
+                return YES;
+          }];
+{% endhighlight %}
+
+所以时间长了，我们url注册函数的就是一个大的集合，出现了很多允余的代码
+
+另外所有的url：xxxxxx，都是通过一个放置在urlHandle.h的宏定义，格式为
+
+KINDEX_URL_PAGE_XXX
+
+{% highlight java%}
+  #define kMAIN_URL_PAGE_INDEX @"mainIndex"
+  #define KINDEX_URL_PAGE_TUCHAO @"lmtucao"
+
+  ///---------------------------
+  /// @name creditor page
+  ///---------------------------
+  #define kMAIN_URL_PAGE_CREDITOR @"mainCreditor"
+
+  //不同种类的理财列表 eg:全部短期产品，全部在线定期产品
+  #define kDIFFTYPE_URL_PAGE_LIST @"creditorListForSale"
+  #define kCREDITOR_URL_PAGE_LIST @"creditorList"
+
+  #define kCREDITOR_URL_PAGE_DETAIL @"creditorDetail"
+  #define kINSURANCE_URL_PAGE_DETAIL @"insuranceDetail"
+  #define kYYZ_URL_PAGE_DETAIL @"yyzDetail"
+  #define kHKBNY_URL_PAGE_DETAIL @"hkbnyDetail"
+{% endhighlight %}
+
+搜索了我们工程所有的代码，发现这些宏定义基本没有使用过，原因很简单：
+
+1、宏定义比较长，不方便阅读
+
+2、宏定义的是url的path，而我们在使用url时，使用的是cf163://xxxx,所以在使用上还需做一层处理
+
+当然可能主要还是为了方便，大家都是用放在云协上的url，所以代码中宏的定义的作用没有体现出来
+
+再看看实现跳转的代码的大致使用方式如下：
+{% highlight java%}
+  [weakSelf gotoTuchao:parameters];
+
+- (void)gotoTuchao:(NSDictionary *)parameters
+{
+    CFFeedBackController *controller = [[CFFeedBackController alloc] init];
+    controller.xxx = parameters[xxxx];
+    [parameters setValue:[NSNumber numberWithBool:YES] forKey:NT_JUMPURL_NEED_LOGIN];
+    [parameters setValue:[NSNumber numberWithInt:0] forKey:NT_JUMPURL_FROM_ROOT_TAB_INDEX];
+    [self pushViewController:controller withParameters:parameters];
+}
+{% endhighlight %}
+
+代码的第一句是声明url跳转到的contorller
+
+第二句是給contorller传递属性值
+
+第三句就是设置这个url跳转是否需要用户登录，如果需要则先跳出登陆弹窗
+
+第四句是设置url默认属于哪个tab，这个的作用是，当需要url调入的时候从根tab跳进用到
+
+第五局就是现实被调的contorller
+
+这部分代码又是基本重复的，我们每加一个url都需要加这样一段回调，并将被调用的类引入到头文件中，引用的头文件常常的一串
+{% highlight java%}
+#import "CFAboutViewController.h"
+#import "CFAccountBalanceController.h"
+#import "CFAccountSettingController.h"
+#import "CFActivityController.h"
+#import "CFAppTabViewController.h"
+#import "CFCardBindingController.h"
+#import "CFCreditorDetailController.h"
+....
+{% endhighlight %}
+
+所以也导致了代码大量的重复允余。
+
+综上，进行了以下代码的优化策略：
+
+1、使用一个数组管理所有的url，之后每加一个一个url，我们只处理数组就行
+
+2、使用运行时实现跳转模块代码，减少大量的类库依赖
+
+3、增加url跳转时传参的管理
+
+具体优化如下：
+定义一个url数组，每一行数组数据仍然是一个子数组，子数组存放的数据依次为：url、url跳转调用的类名称、是否需要登陆、默认的根tab序列号
+所以我们定义的数据是这个样子：
+
+{% highlight java%}
+  @[
+      @[ @"lmtucao", @"CFFeedBackController", @YES, @0 ],                       //向立马君吐槽
+      @[ @"creditorList", @"CFProductListController", @NO, @1 ],                //理财列表
+      @[ @"creditorListForSale", @"CFHistoryProductListController", @YES, @1 ], //不同种类的产品列表
+      @[ @"creditorPay", @"CFCreditorPayController", @YES, @1 ],                //定期购买
+      ...
+  ]
+{% endhighlight %}
+
+那么在注册url的函数就可以简化成一个for循环:
+{% highlight java%}
+
+- (void)registerCommonRoute
+{
+   NSArray *urls = @[....];
+
+  WEAK_SELF(weakSelf);
+  for (NSArray *urlInfos in urls) {
+  NSString *urlStr = [urlInfos objectAtIndex:0];
+  __weak NSString *className = [urlInfos objectAtIndex:1];
+  BOOL isNeedLogin = [[urlInfos objectAtIndex:2] boolValue];
+  NSInteger tabIndex = [[urlInfos objectAtIndex:3] integerValue];
+
+  [JLRoutes addRoute:[self getRoutes:urlStr]
+             handler:^BOOL(NSDictionary *parameters) {
+                 [weakSelf gotoPageWithParams:parameters controller:className isNeedLogin:isNeedLogin tabIndex:tabIndex];
+                 return YES;
+             }];
+  }
+}
+{% endhighlight %}
+
+然后跳转模块使用运行时替换，很是简单：
+{% highlight java%}
+- (void)gotoPageWithParams:(NSDictionary *)parameters
+              controller:(NSString *)className
+             isNeedLogin:(BOOL)isNeedLogin
+                tabIndex:(NSInteger)tabIndex
+{
+  Class cls = NSClassFromString(className);
+  if (cls) {
+      id controller = [[cls alloc] init];
+      [self setProptyWithObject:controller paramers:parameters];
+      [parameters setValue:[NSNumber numberWithInteger:tabIndex] forKey:NT_JUMPURL_FROM_ROOT_TAB_INDEX];
+      [parameters setValue:[NSNumber numberWithBool:isNeedLogin] forKey:NT_JUMPURL_NEED_LOGIN];
+      [self pushViewController:controller withParameters:parameters];
+    }
+}
+
+{% endhighlight %}
+
+结构同老代码一样，区别就在使用了运行时，免去了类的依赖
+
+代码属性赋值也使用了运行时方法，根据类库的名称，匹配url中的对应的属性名，如url为cf163://xxx?name=123
+
+那么xxx对应的类CFXXXController的name属性就会被设置为123，该方法目前支持string、number类型的传参，不支持对象
+
+当然对controller构造函数需要传参的，目前还需要做单独处理，在操作上需要在我们的url数组里添加这个contorller对应的url
+
+但是设置的类目设置为空，如下的url目前是需要传参的：
+{% highlight java%}
+
+      /**
+       *  以下由于构造函数需要传参，做单独处理的url
+       */
+      @[ @"insurancePay", @"", @YES, @1 ], //保险类购买
+
+      @[ @"userCreditorDetail", @"", @YES, @2 ],          //定期订单详情
+      @[ @"mainUser/userCreditorDetail", @"", @YES, @2 ], //定期订单详情
+
+      @[ @"setTradePwd", @"", @YES, @0 ],              //设置交易密码
+      @[ kLOGIN_URL_PAGE_NTES, @"", @NO, @0 ],         //登陆
+      @[ kUSER_URL_PAGE_SET_PHONE, @"", @YES, @2 ],    //设置常用手机
+      @[ kEMAILSET_URL_PAGE_SET_EMAIL, @"", @YES, @2 ] //设置常用邮箱
+
+{% endhighlight %}
+
+在跳转的部分单独处理
+
+{% highlight java%}
+[JLRoutes addRoute:[self getRoutes:urlStr]
+               handler:^BOOL(NSDictionary *parameters) {
+                   if (className.length == 0) {
+                       [weakSelf gotoSpecialPage:parameters];
+                   }
+                   else {
+                       [weakSelf gotoPageWithParams:parameters controller:className isNeedLogin:isNeedLogin tabIndex:tabIndex];
+                   }
+                   return YES;
+               }];
+{% endhighlight %}
+
+优化同时还对react-native的url进行了汇总，详见代码
