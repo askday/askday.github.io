@@ -32,7 +32,7 @@ function toDictionary(self)
 end
 
 {%endhighlight%}
-
+<!-- more -->
 本地debug运行补丁，完全正常没有发生任何异常
 
 可是当切换到release模式运行补丁发生了崩溃，崩溃代码段：

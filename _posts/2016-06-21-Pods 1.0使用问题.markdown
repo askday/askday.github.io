@@ -30,7 +30,7 @@ pod MBProgressHUD (~> 0.9.1)
 end
 {%endhighlight%}
 
-
+<!-- more -->
 可是继续运行pod update，仍然报错，如下：
 
 {%highlight  java%}
